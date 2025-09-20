@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse - Live Poll</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
+            animation: slideUp 0.5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            background: #10b981;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        #question {
+            font-size: 1.5em;
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+
+        #voting-section {
+            margin-bottom: 30px;
+        }
+
+        .option-button {
+            width: 100%;
+            padding: 18px;
+            margin-bottom: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            background: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-button:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .option-button:active {
+            transform: translateY(0);
+        }
+
+        .option-button.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        #results-section {
+            display: none;
+        }
+
+        .result-item {
+            margin-bottom: 20px;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .result-bar {
+            height: 40px;
+            background: #f3f4f6;
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .result-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+        }
+
+        .result-fill.winner {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .percentage-label {
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Pulse Poll</h1>
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                LIVE
+            </div>
+        </div>
+
+        <div id="question">Loading question...</div>
+
+        <div id="voting-section">
+        </div>
+
+        <div id="results-section">
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const questionEl = document.getElementById('question');
+            const votingSection = document.getElementById('voting-section');
+            const resultsSection = document.getElementById('results-section');
+
+            // --- CHANGES START HERE ---
+
+            let pollID = '';
+            let clientID = '';
+            let optionsMap = {};
+            let hasVoted = false;
+            let ws; // Declare ws here so it's accessible by all functions
+
+            // 1. Get Poll ID and Client ID
+            function setupClient() {
+                const params = new URLSearchParams(window.location.search);
+                pollID = params.get('id');
+                if (!pollID) {
+                    questionEl.textContent = "Error: Poll ID not found in URL.";
+                    return;
+                }
+
+                clientID = localStorage.getItem('pulseClientID');
+                if (!clientID) {
+                    clientID = 'client_' + Math.random().toString(36).substr(2, 9);
+                    localStorage.setItem('pulseClientID', clientID);
+                }
+
+                // Connect to the WebSocket ONLY after we confirm we have a pollID
+                ws = connectWebSocket();
+            }
+
+            // 4. Connect to WebSocket (No changes inside this function)
+            function connectWebSocket() {
+                if (!pollID) {
+                    console.error("Cannot connect WebSocket without a Poll ID.");
+                    return;
+                }
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${pollID}`);
+
+                socket.onopen = () => console.log('WebSocket connected successfully');
+                socket.onclose = () => console.log('WebSocket disconnected');
+                socket.onerror = (err) => console.error('WebSocket error:', err);
+
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'voteUpdate') {
+                        console.log('Received vote update:', data.votes);
+                        updateResultsUI(data.votes);
+                    }
+                };
+                return socket;
+            }
+
+            // --- Initial execution ---
+            // The old line "const ws = connectWebSocket();" has been removed from here.
+            setupClient();
+            if (pollID) {
+                fetchPollData();
+            }
+
+            // --- NO OTHER CHANGES ARE NEEDED BELOW THIS LINE ---
+
+            // 2. Fetch initial poll data
+            async function fetchPollData() {
+                try {
+                    const response = await fetch(`/api/poll/${pollID}`);
+                    if (!response.ok) throw new Error('Poll not found');
+
+                    const poll = await response.json();
+                    questionEl.textContent = poll.question;
+                    optionsMap = poll.options;
+
+                    createVotingButtons(poll.options);
+                    createResultBars(poll.options, poll.votes);
+                    updateResultsUI(poll.votes);
+
+                } catch (error) {
+                    questionEl.textContent = `Error: ${error.message}`;
+                    console.error("Failed to fetch poll data:", error);
+                }
+            }
+
+            // 3. Create UI elements
+            function createVotingButtons(options) {
+                votingSection.innerHTML = '';
+                for (const id in options) {
+                    const button = document.createElement('button');
+                    button.className = 'option-button';
+                    button.textContent = options[id];
+                    button.dataset.optionId = id;
+                    button.onclick = () => castVote(id, button);
+                    votingSection.appendChild(button);
+                }
+            }
+
+            function createResultBars(options, votes) {
+                resultsSection.innerHTML = '';
+                for (const id in options) {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'result-item';
+                    resultItem.innerHTML = `
+                    <div class="result-header">
+                        <span class="option-name">${options[id]}</span>
+                        <span class="vote-count" id="count-${id}">(${votes[id] || 0} votes)</span>
+                    </div>
+                    <div class="result-bar">
+                        <div class="result-fill" id="fill-${id}" style="width: 0%;">
+                            <span class="percentage-label" id="percent-${id}">0%</span>
+                        </div>
+                    </div>
+                `;
+                    resultsSection.appendChild(resultItem);
+                }
+            }
+
+            // 5. Handle voting
+            function castVote(optionId, button) {
+                if (hasVoted || !ws) return;
+                hasVoted = true;
+
+                const voteMessage = {
+                    vote: optionId,
+                    clientId: clientID
+                };
+                ws.send(JSON.stringify(voteMessage));
+
+                document.querySelectorAll('.option-button').forEach(btn => {
+                    btn.disabled = true;
+                    if (btn === button) {
+                        btn.classList.add('selected');
+                    }
+                });
+
+                votingSection.style.display = 'none';
+                resultsSection.style.display = 'block';
+            }
+
+            // 6. Update results UI when new data arrives
+            function updateResultsUI(votes) {
+                const totalVotes = Object.values(votes).reduce((sum, count) => sum + count, 0);
+
+                let maxVotes = 0;
+                if (totalVotes > 0) {
+                    maxVotes = Math.max(...Object.values(votes));
+                }
+
+                for (const id in optionsMap) {
+                    const count = votes[id] || 0;
+                    const percentage = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(1) : 0;
+
+                    const countEl = document.getElementById(`count-${id}`);
+                    const fillEl = document.getElementById(`fill-${id}`);
+                    const percentEl = document.getElementById(`percent-${id}`);
+
+                    if (countEl && fillEl && percentEl) {
+                        countEl.textContent = `(${count} votes)`;
+                        fillEl.style.width = `${percentage}%`;
+                        percentEl.textContent = `${percentage}%`;
+
+                        if (count > 0 && count === maxVotes) {
+                            fillEl.classList.add('winner');
+                        } else {
+                            fillEl.classList.remove('winner');
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

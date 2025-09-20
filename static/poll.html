@@ -231,15 +231,14 @@
             const votingSection = document.getElementById('voting-section');
             const resultsSection = document.getElementById('results-section');
 
-            // --- CHANGES START HERE ---
 
             let pollID = '';
             let clientID = '';
             let optionsMap = {};
             let hasVoted = false;
-            let ws; // Declare ws here so it's accessible by all functions
+            let ws; 
 
-            // 1. Get Poll ID and Client ID
+            
             function setupClient() {
                 const params = new URLSearchParams(window.location.search);
                 pollID = params.get('id');
@@ -254,11 +253,11 @@
                     localStorage.setItem('pulseClientID', clientID);
                 }
 
-                // Connect to the WebSocket ONLY after we confirm we have a pollID
+              
                 ws = connectWebSocket();
             }
 
-            // 4. Connect to WebSocket (No changes inside this function)
+          
             function connectWebSocket() {
                 if (!pollID) {
                     console.error("Cannot connect WebSocket without a Poll ID.");
@@ -281,16 +280,12 @@
                 return socket;
             }
 
-            // --- Initial execution ---
-            // The old line "const ws = connectWebSocket();" has been removed from here.
+         
             setupClient();
             if (pollID) {
                 fetchPollData();
             }
 
-            // --- NO OTHER CHANGES ARE NEEDED BELOW THIS LINE ---
-
-            // 2. Fetch initial poll data
             async function fetchPollData() {
                 try {
                     const response = await fetch(`/api/poll/${pollID}`);
@@ -310,7 +305,7 @@
                 }
             }
 
-            // 3. Create UI elements
+         
             function createVotingButtons(options) {
                 votingSection.innerHTML = '';
                 for (const id in options) {
@@ -343,7 +338,7 @@
                 }
             }
 
-            // 5. Handle voting
+         
             function castVote(optionId, button) {
                 if (hasVoted || !ws) return;
                 hasVoted = true;
